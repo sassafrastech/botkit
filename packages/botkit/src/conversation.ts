@@ -35,7 +35,6 @@ interface BotkitConvoTrigger {
  */
 interface BotkitMessageTemplate {
     text: string[];
-    translate?: string;
     action?: string;
     execute?: {
         script: string;
@@ -114,6 +113,7 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
     private _beforeHooks: {};
     private _afterHooks: { (context: TurnContext, results: any): void }[];
     private _changeHooks: {};
+    private _transformHooks: {};
     private _controller: Botkit;
 
     /**
@@ -127,6 +127,7 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
         this._beforeHooks = {};
         this._afterHooks = [];
         this._changeHooks = {};
+        this._transformHooks = {};
         this.script = {};
 
         this._controller = controller;
@@ -518,6 +519,34 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
     }
 
     /**
+     * Bind a function to transform message text before performing template replacement.
+     * Can be used for i18n, for example.
+     *
+     * ```javascript
+     * convo.say('Hello, {{vars.name}}!');
+     * convo.transform('text', (text, vars) {
+     *  return text.replace('Hello', 'Hola');
+     * });
+     * ```
+     *
+     * ```javascript
+     * convo.say('translation.hello');
+     * convo.transform('text', (text, vars) {
+     *  return i18n.t(text, vars);
+     * });
+     * ```
+     * @param type type of data to transform (currently supports: text)
+     * @param handler a handler function that can be used to change the value
+     */
+    public transform(type: string, handler: (text, vars) => string): void {
+        if (!this._transformHooks[type]) {
+            this._transformHooks[type] = [];
+        }
+
+        this._transformHooks[type].push(handler);
+    }
+
+    /**
      * Called automatically when a dialog begins. Do not call this directly!
      * @ignore
      * @param dc the current DialogContext
@@ -655,7 +684,7 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
             // This could be extended to include cards and other activity attributes.
             } else {
                 // if there is text, attachments, or any channel data fields at all...
-                if (line.type || line.text || line.translate || line.attachments || (line.channelData && Object.keys(line.channelData).length)) {
+                if (line.type || line.text || line.attachments || (line.channelData && Object.keys(line.channelData).length)) {
                     await dc.context.sendActivity(this.makeOutgoing(line, step.values));
                 } else if (!line.action) {
                     console.error('Dialog contains invalid message', line);
@@ -772,10 +801,11 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
             outgoing.channelData[key] = line.channelData[key];
         }
 
-        // @ts-ignore
-        if (line.translate && global.i18n) {
-            // @ts-ignore
-            outgoing.text = i18n.t(vars.locale, line.translate, vars);
+        // Transform the text BEFORE doing token replacement, e.g. to allow i18n.
+        if (this._transformHooks['text']) {
+            this._transformHooks['text'].forEach((hook) => {
+                outgoing.text = hook(outgoing.text, vars);
+            })
         }
 
         // Handle template token replacements
