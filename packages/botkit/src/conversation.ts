@@ -35,6 +35,7 @@ interface BotkitConvoTrigger {
  */
 interface BotkitMessageTemplate {
     text: string[];
+    translate?: string;
     action?: string;
     execute?: {
         script: string;
@@ -654,7 +655,7 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
             // This could be extended to include cards and other activity attributes.
             } else {
                 // if there is text, attachments, or any channel data fields at all...
-                if (line.type || line.text || line.attachments || (line.channelData && Object.keys(line.channelData).length)) {
+                if (line.type || line.text || line.translate || line.attachments || (line.channelData && Object.keys(line.channelData).length)) {
                     await dc.context.sendActivity(this.makeOutgoing(line, step.values));
                 } else if (!line.action) {
                     console.error('Dialog contains invalid message', line);
@@ -769,6 +770,12 @@ export class BotkitConversation<O extends object = {}> extends Dialog<O> {
         // copy all the values in channelData fields
         for (var key in line.channelData) {
             outgoing.channelData[key] = line.channelData[key];
+        }
+
+        // @ts-ignore
+        if (line.translate && global.i18n) {
+            // @ts-ignore
+            outgoing.text = i18n.t(vars.locale, line.translate, vars);
         }
 
         // Handle template token replacements
