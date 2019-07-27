@@ -1,5 +1,6 @@
 {
   "name": "botkit",
+  "version": "4.0.2",
   "main": "./packages/botkit/lib/index.js",
   "typings": "./packages/botkit/lib/index.d.ts",
   "private": true,
